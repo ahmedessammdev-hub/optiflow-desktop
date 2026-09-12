@@ -1,0 +1,57 @@
+{
+  "name": "optical-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first optical shop management",
+  "author": "Optical Desktop",
+  "main": "dist-electron/main.cjs",
+  "scripts": {
+    "dev": "npm run build && electron .",
+    "build": "tsc --noEmit && vite build && node scripts/build-electron.mjs",
+    "format": "prettier --write apps packages tests scripts *.ts *.mjs *.json docs/*.md README.md",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "lint": "eslint .",
+    "package": "npm run build && electron-builder --win nsis",
+    "package:dir": "npm run build && electron-builder --dir",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.90.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-hook-form": "^7.65.0",
+    "recharts": "^3.3.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "@playwright/test": "^1.56.0",
+    "@testing-library/react": "^16.3.0",
+    "@types/node": "^24.10.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.1.0",
+    "electron": "^44.3.0",
+    "electron-builder": "^26.0.12",
+    "esbuild": "^0.25.11",
+    "eslint": "^9.39.0",
+    "jsdom": "^27.1.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.0",
+    "prettier": "^3.6.2",
+    "vite": "^7.2.0",
+    "vitest": "^4.0.0"
+  },
+  "build": {
+    "appId": "com.optical.desktop",
+    "productName": "Optical Desktop",
+    "directories": { "output": "release" },
+    "files": ["dist/**/*", "dist-electron/**/*", "package.json"],
+    "extraResources": [{ "from": "packages/database/migrations", "to": "migrations" }],
+    "asarUnpack": ["**/*.node"],
+    "win": { "target": "nsis", "icon": "assets/icon.ico" },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "deleteAppDataOnUninstall": false }
+  }
+}
