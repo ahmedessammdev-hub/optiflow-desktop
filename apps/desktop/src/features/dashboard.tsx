@@ -39,6 +39,8 @@ export function DashboardPage() {
     debt: ["Outstanding debt", "المديونية"],
     revenue_growth: ["Revenue growth", "نمو المبيعات"],
     profit_growth: ["Profit growth", "نمو الربح"],
+    appointments_today: ["Appointments in period", "مواعيد الفترة"],
+    lab_pending: ["Pending lab orders", "طلبات المعمل المعلقة"],
   };
   return (
     <>
@@ -84,7 +86,12 @@ export function DashboardPage() {
                 "—"
               ) : key.includes("growth") ? (
                 `${value.toFixed(1)}%`
-              ) : ["sales", "new_customers"].includes(key) ? (
+              ) : [
+                  "sales",
+                  "new_customers",
+                  "appointments_today",
+                  "lab_pending",
+                ].includes(key) ? (
                 value
               ) : (
                 <Money value={value} />

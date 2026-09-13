@@ -3,6 +3,22 @@ import { createHash, randomUUID } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Row } from "../shared/schemas";
+const synchronizedEntities = new Set([
+  "appointments",
+  "lab_orders",
+  "repairs",
+  "customer_followups",
+  "quotes",
+  "stocktakes",
+  "supplier_returns",
+  "branches",
+  "inventory_transfers",
+  "sales",
+  "purchase_orders",
+  "expenses",
+  "cash_sessions",
+  "products",
+]);
 export class Store {
   readonly db: SQLite;
   constructor(
@@ -53,6 +69,7 @@ export class Store {
     return this.db.prepare(sql).run(...params);
   }
   tx<T>(fn: () => T): T {
+    if (this.db.inTransaction) return fn();
     return this.db.transaction(fn).immediate();
   }
   insert(table: string, values: Row) {
@@ -70,6 +87,7 @@ export class Store {
     before: unknown = null,
     after: unknown = null,
   ) {
+    const createdAt = new Date().toISOString();
     this.insert("audit_logs", {
       id: randomUUID(),
       user_id: user,
@@ -78,8 +96,22 @@ export class Store {
       entity_id: entityId,
       before_data: JSON.stringify(before),
       after_data: JSON.stringify(after),
-      created_at: new Date().toISOString(),
+      created_at: createdAt,
     });
+    if (
+      synchronizedEntities.has(entity) &&
+      this.get(
+        "SELECT 1 ok FROM sqlite_master WHERE type='table' AND name='sync_outbox'",
+      )
+    )
+      this.insert("sync_outbox", {
+        id: randomUUID(),
+        event_type: `${entity}.${action}`,
+        entity_id: entityId,
+        payload: JSON.stringify({ before, after }),
+        created_at: createdAt,
+        synced_at: null,
+      });
   }
   close() {
     this.db.close();

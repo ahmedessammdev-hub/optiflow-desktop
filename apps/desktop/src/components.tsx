@@ -66,6 +66,7 @@ export type Field = {
     | "text"
     | "number"
     | "date"
+    | "datetime-local"
     | "password"
     | "email"
     | "textarea"

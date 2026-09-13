@@ -5,21 +5,89 @@ import { Catalog } from "./catalog";
 import { Finance } from "./finance";
 import { Operations } from "./operations";
 import { Queries, type Report } from "./queries";
+import { Expansion } from "./expansion";
 export class Application {
   readonly auth: Auth;
   readonly catalog: Catalog;
   readonly finance: Finance;
   readonly operations: Operations;
   readonly queries: Queries;
+  readonly expansion: Expansion;
   constructor(readonly store: Store) {
     this.auth = new Auth(store);
     this.catalog = new Catalog(store, this.auth);
     this.finance = new Finance(store, this.auth);
     this.operations = new Operations(store, this.auth);
+    this.expansion = new Expansion(store, this.auth, this.finance);
     this.queries = new Queries(store, this.auth);
   }
   execute(command: string, input: unknown): unknown {
     switch (command) {
+      case "extensions.save": {
+        const data = z
+          .object({
+            kind: z.enum([
+              "appointments",
+              "lab_orders",
+              "repairs",
+              "customer_followups",
+            ]),
+            data: z.unknown(),
+          })
+          .parse(input);
+        return this.expansion.saveWorkflow(data.kind, data.data);
+      }
+      case "extensions.list": {
+        const data = z
+          .object({
+            kind: z.enum([
+              "appointments",
+              "lab_orders",
+              "repairs",
+              "customer_followups",
+              "quotes",
+              "stocktakes",
+              "supplier_returns",
+              "branches",
+              "transfers",
+            ]),
+            query: z.unknown(),
+          })
+          .parse(input);
+        return this.expansion.list(data.kind, data.query);
+      }
+      case "quotes.create":
+        return this.expansion.createQuote(input);
+      case "quotes.get":
+        return this.expansion.quoteDetail(input);
+      case "quotes.deposit":
+        return this.expansion.quoteDeposit(input);
+      case "quotes.convert":
+        return this.expansion.convertQuote(input);
+      case "quotes.cancel":
+        return this.expansion.cancelQuote(input);
+      case "stocktakes.start":
+        return this.expansion.startStocktake(input);
+      case "stocktakes.get":
+        return this.expansion.stocktakeDetail(input);
+      case "stocktakes.count":
+        return this.expansion.countStock(input);
+      case "stocktakes.post":
+        return this.expansion.postStocktake(input);
+      case "supplier_returns.create":
+        return this.expansion.supplierReturn(input);
+      case "branches.list":
+        return this.expansion.branches();
+      case "branches.active":
+        return this.expansion.activeBranch();
+      case "branches.select":
+        return this.expansion.selectBranch(input);
+      case "branches.create":
+        return this.expansion.createBranch(input);
+      case "branches.stock":
+        return this.expansion.branchStock(input);
+      case "branches.transfer":
+        return this.expansion.transfer(input);
       case "users.update":
         return this.auth.updateUser(input);
       case "users.reset":

@@ -6,6 +6,28 @@ export type Invoice = ReturnType<Finance["invoice"]>;
 export type Dashboard = ReturnType<Queries["dashboard"]>;
 export type Profile = { customer: Row; prescriptions: Prescription[] };
 export type ResultMap = {
+  "extensions.save": string;
+  "extensions.list": Page;
+  "quotes.create": string;
+  "quotes.get": ReturnType<
+    import("../domain/expansion").Expansion["quoteDetail"]
+  >;
+  "quotes.deposit": void;
+  "quotes.convert": string;
+  "quotes.cancel": void;
+  "stocktakes.start": string;
+  "stocktakes.get": ReturnType<
+    import("../domain/expansion").Expansion["stocktakeDetail"]
+  >;
+  "stocktakes.count": void;
+  "stocktakes.post": void;
+  "supplier_returns.create": string;
+  "branches.list": Row[];
+  "branches.active": Row | undefined;
+  "branches.select": Row;
+  "branches.create": string;
+  "branches.stock": Row[];
+  "branches.transfer": string;
   "attachments.list": Row[];
   "attachments.add": string | null;
   "attachments.open": void;

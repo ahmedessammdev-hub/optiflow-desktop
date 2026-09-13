@@ -6,7 +6,7 @@ import { Store } from "../database/database";
 import { Auth } from "./auth";
 import { minor, allocate } from "../shared/money";
 import { prescriptionSchema, productTypes, type Row } from "../shared/schemas";
-import { moveStock } from "./stock";
+import { activeBranchId, moveStock } from "./stock";
 const legacyId = z.union([z.string(), z.number().int()]).transform(String);
 const record = z.record(z.string(), z.unknown());
 const schema = z.object({
@@ -309,6 +309,7 @@ export class LegacyImporter {
           created_at: timestamp(s.created_at),
           legacy_id: key,
           provenance: "legacy_current_description_unknown_cost",
+          branch_id: activeBranchId(this.store),
         });
         saleMap.set(key, newId);
         const discounts = allocate(discount, weights),

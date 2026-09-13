@@ -1,5 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { Store } from "../database/database";
+export const MAIN_BRANCH_ID = "00000000-0000-4000-8000-000000000010";
+export function activeBranchId(store: Store) {
+  const value = store.get(
+    "SELECT value FROM app_settings WHERE key='active_branch_id'",
+  )?.value;
+  if (!value) return MAIN_BRANCH_ID;
+  try {
+    return String(JSON.parse(String(value)));
+  } catch {
+    return MAIN_BRANCH_ID;
+  }
+}
 export function moveStock(
   store: Store,
   productId: string,
@@ -8,6 +20,7 @@ export function moveStock(
   reference: string,
   reason: string,
   userId: string,
+  branchId = activeBranchId(store),
 ) {
   if (!store.db.inTransaction)
     throw new Error("Stock changes require a transaction");
@@ -30,6 +43,32 @@ export function moveStock(
   );
   if (result.changes !== 1)
     throw new Error("Stock conflict; retry the operation");
+  const branchBefore = Number(
+    store.get(
+      "SELECT quantity FROM branch_stock WHERE branch_id=? AND product_id=?",
+      branchId,
+      productId,
+    )?.quantity ?? 0,
+  );
+  const branchAfter = branchBefore + delta;
+  if (branchAfter < 0) throw new Error("Insufficient stock in active branch");
+  if (delta < 0) {
+    const reserved = Number(
+      store.get(
+        "SELECT COALESCE(sum(quantity),0) n FROM stock_reservations WHERE branch_id=? AND product_id=? AND status='active'",
+        branchId,
+        productId,
+      )?.n,
+    );
+    if (branchAfter < reserved)
+      throw new Error("Stock is reserved for an active quote");
+  }
+  store.run(
+    "INSERT INTO branch_stock(branch_id,product_id,quantity) VALUES (?,?,?) ON CONFLICT(branch_id,product_id) DO UPDATE SET quantity=excluded.quantity",
+    branchId,
+    productId,
+    branchAfter,
+  );
   store.insert("inventory_movements", {
     id: randomUUID(),
     product_id: productId,
@@ -42,5 +81,6 @@ export function moveStock(
     reason,
     user_id: userId,
     created_at: new Date().toISOString(),
+    branch_id: branchId,
   });
 }

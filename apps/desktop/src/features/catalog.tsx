@@ -65,6 +65,11 @@ export function CatalogPage({
     { page_size: 100 },
     kind === "products" && editing !== undefined && can("purchases.view"),
   );
+  const parentProducts = useData(
+    "products.list",
+    { page_size: 100, sort: "name", direction: "asc" },
+    kind === "products" && editing !== undefined,
+  );
   const title = {
     customers: t("Customers", "العملاء"),
     products: t("Products", "المنتجات"),
@@ -128,6 +133,21 @@ export function CatalogPage({
               { name: "material", en: "Material", ar: "الخامة" },
               { name: "color", en: "Color", ar: "اللون" },
               { name: "size", en: "Size", ar: "المقاس" },
+              {
+                name: "parent_product_id",
+                en: "Parent style (variant of)",
+                ar: "الموديل الأساسي (هذا المنتج Variant منه)",
+                type: "select",
+                options: [
+                  { value: "", label: t("Independent product", "منتج مستقل") },
+                  ...(parentProducts.data?.rows ?? [])
+                    .filter((r) => r.id !== editing?.id)
+                    .map((r) => ({
+                      value: String(r.id),
+                      label: String(r.name),
+                    })),
+                ],
+              },
               {
                 name: "unit_cost",
                 en: "Purchase cost",
@@ -195,6 +215,7 @@ export function CatalogPage({
       payload.unit_price = minor(String(values.unit_price));
       payload.category_id = values.category_id || null;
       payload.supplier_id = values.supplier_id || null;
+      payload.parent_product_id = values.parent_product_id || null;
     }
     if (kind === "categories" || kind === "products")
       payload.reorder_level =

@@ -16,6 +16,7 @@ import {
 import { periodRange, periods } from "../shared/dates";
 import { growth } from "../shared/money";
 import { defaultSettings } from "../shared/defaults";
+import { activeBranchId } from "./stock";
 const balanceSql = `s.total-COALESCE((SELECT sum(total) FROM returns WHERE sale_id=s.id),0)-COALESCE((SELECT sum(amount) FROM payments WHERE sale_id=s.id),0)+COALESCE((SELECT sum(amount) FROM refunds WHERE sale_id=s.id),0)`;
 const reports = {
   sales: {
@@ -26,7 +27,7 @@ const reports = {
   },
   payments: {
     permission: "payments.view",
-    sql: "SELECT p.*,s.customer_id,s.seller_id employee_id,s.invoice_number FROM payments p JOIN sales s ON s.id=p.sale_id",
+    sql: "SELECT p.*,s.customer_id,s.seller_id employee_id,s.invoice_number,s.branch_id FROM payments p JOIN sales s ON s.id=p.sale_id",
     search: ["invoice_number", "method", "notes"],
     date: "created_at",
   },
@@ -50,13 +51,13 @@ const reports = {
   },
   returns: {
     permission: "sales.view",
-    sql: "SELECT r.*,s.invoice_number FROM returns r JOIN sales s ON s.id=r.sale_id",
+    sql: "SELECT r.*,s.invoice_number,s.branch_id FROM returns r JOIN sales s ON s.id=r.sale_id",
     search: ["invoice_number", "reason"],
     date: "created_at",
   },
   cash: {
     permission: "cash.view",
-    sql: "SELECT * FROM cash_transactions",
+    sql: "SELECT t.*,s.branch_id FROM cash_transactions t JOIN cash_sessions s ON s.id=t.session_id",
     search: ["type", "reason"],
     date: "created_at",
   },
@@ -68,7 +69,7 @@ const reports = {
   },
   debts: {
     permission: "reports.view",
-    sql: `SELECT s.id,s.invoice_number,s.customer_id,json_extract(customer_snapshot,'$.name') customer_name,${balanceSql} balance,s.created_at FROM sales s WHERE (${balanceSql})>0`,
+    sql: `SELECT s.id,s.invoice_number,s.customer_id,s.branch_id,json_extract(customer_snapshot,'$.name') customer_name,${balanceSql} balance,s.created_at FROM sales s WHERE (${balanceSql})>0`,
     search: ["invoice_number", "customer_name"],
     date: "created_at",
   },
@@ -179,6 +180,22 @@ export class Queries {
       clauses.push("seller_id=?");
       params.push(q.employee_id);
     }
+    if (
+      [
+        "sales",
+        "payments",
+        "expenses",
+        "inventory",
+        "purchases",
+        "returns",
+        "cash",
+        "debts",
+        "sessions",
+      ].includes(kind)
+    ) {
+      clauses.push("branch_id=?");
+      params.push(activeBranchId(this.store));
+    }
     const sql = `SELECT * FROM (${report.sql}) WHERE ${clauses.join(" AND ")}`;
     return {
       rows: this.store.all(
@@ -197,8 +214,9 @@ export class Queries {
   lowStock() {
     this.auth.require("inventory.view");
     return this.store.all(
-      "SELECT p.id,p.name,p.sku,p.stock_quantity,COALESCE(p.reorder_level,c.reorder_level,?) reorder_level FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.archived_at IS NULL AND p.stock_quantity<=COALESCE(p.reorder_level,c.reorder_level,?) ORDER BY p.stock_quantity LIMIT 100",
+      "SELECT p.id,p.name,p.sku,COALESCE(s.quantity,0) stock_quantity,COALESCE(p.reorder_level,c.reorder_level,?) reorder_level FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN branch_stock s ON s.product_id=p.id AND s.branch_id=? WHERE p.archived_at IS NULL AND COALESCE(s.quantity,0)<=COALESCE(p.reorder_level,c.reorder_level,?) ORDER BY stock_quantity LIMIT 100",
       this.readSettings().reorder_level,
+      activeBranchId(this.store),
       this.readSettings().reorder_level,
     );
   }
@@ -217,39 +235,51 @@ export class Queries {
       new Date(),
       data.from && data.to ? { from: data.from, to: data.to } : undefined,
     );
+    const branchId = activeBranchId(this.store);
     const aggregate = (start: string, end: string) => {
       const sale = this.store.get(
-        "SELECT COALESCE(sum(total-tax),0) revenue,count(*) sales,COALESCE(sum(total),0) invoiced FROM sales WHERE created_at>=? AND created_at<?",
+        "SELECT COALESCE(sum(total-tax),0) revenue,count(*) sales,COALESCE(sum(total),0) invoiced FROM sales WHERE created_at>=? AND created_at<? AND branch_id=?",
         start,
         end,
+        branchId,
       )!;
       const cost = Number(
         this.store.get(
-          "SELECT COALESCE(sum(i.unit_cost*i.quantity),0) n FROM sale_items i JOIN sales s ON s.id=i.sale_id WHERE s.created_at>=? AND s.created_at<?",
+          "SELECT COALESCE(sum(i.unit_cost*i.quantity),0) n FROM sale_items i JOIN sales s ON s.id=i.sale_id WHERE s.created_at>=? AND s.created_at<? AND s.branch_id=?",
           start,
           end,
+          branchId,
         )?.n,
       );
       const returned = this.store.get(
-        "SELECT COALESCE(sum(ri.amount),0) total,COALESCE(sum(si.unit_cost*ri.quantity),0) cost FROM return_items ri JOIN returns r ON r.id=ri.return_id JOIN sale_items si ON si.id=ri.sale_item_id WHERE r.created_at>=? AND r.created_at<?",
+        "SELECT COALESCE(sum(ri.amount),0) total,COALESCE(sum(si.unit_cost*ri.quantity),0) cost FROM return_items ri JOIN returns r ON r.id=ri.return_id JOIN sale_items si ON si.id=ri.sale_item_id JOIN sales s ON s.id=si.sale_id WHERE r.created_at>=? AND r.created_at<? AND s.branch_id=?",
         start,
         end,
+        branchId,
       )!;
       const returnRevenue = Number(
         this.store.get(
-          "SELECT COALESCE(sum(ri.amount-ri.tax_amount),0) n FROM return_items ri JOIN returns r ON r.id=ri.return_id WHERE r.created_at>=? AND r.created_at<?",
+          "SELECT COALESCE(sum(ri.amount-ri.tax_amount),0) n FROM return_items ri JOIN returns r ON r.id=ri.return_id JOIN sale_items si ON si.id=ri.sale_item_id JOIN sales s ON s.id=si.sale_id WHERE r.created_at>=? AND r.created_at<? AND s.branch_id=?",
           start,
           end,
+          branchId,
         )?.n,
       );
       const revenue = Number(sale.revenue) - returnRevenue;
       const cogs = cost - Number(returned.cost);
-      const sum = (table: string) =>
+      const sum = (
+        table: "payments" | "expenses" | "refunds" | "cash_transactions",
+      ) =>
         Number(
           this.store.get(
-            `SELECT COALESCE(sum(amount),0) n FROM ${table} WHERE created_at>=? AND created_at<?`,
+            table === "expenses"
+              ? "SELECT COALESCE(sum(amount),0) n FROM expenses WHERE created_at>=? AND created_at<? AND branch_id=?"
+              : table === "cash_transactions"
+                ? "SELECT COALESCE(sum(t.amount),0) n FROM cash_transactions t JOIN cash_sessions cs ON cs.id=t.session_id WHERE t.created_at>=? AND t.created_at<? AND cs.branch_id=?"
+                : `SELECT COALESCE(sum(t.amount),0) n FROM ${table} t JOIN sales s ON s.id=t.sale_id WHERE t.created_at>=? AND t.created_at<? AND s.branch_id=?`,
             start,
             end,
+            branchId,
           )?.n,
         );
       return {
@@ -281,14 +311,17 @@ export class Queries {
     const metrics: Record<string, number | null> = {
       ...current,
       debt: Number(
-        this.store.get(`SELECT COALESCE(sum(${balanceSql}),0) n FROM sales s`)
-          ?.n,
+        this.store.get(
+          `SELECT COALESCE(sum(${balanceSql}),0) n FROM sales s WHERE s.branch_id=?`,
+          branchId,
+        )?.n,
       ),
       revenue_growth: growth(current.revenue, previous.revenue),
     };
     const unknownCosts = Number(
       this.store.get(
-        "SELECT count(*) n FROM sale_items i JOIN sales s ON s.id=i.sale_id WHERE i.historical_cost_known=0 AND ((s.created_at>=? AND s.created_at<?) OR EXISTS (SELECT 1 FROM return_items ri JOIN returns r ON r.id=ri.return_id WHERE ri.sale_item_id=i.id AND r.created_at>=? AND r.created_at<?))",
+        "SELECT count(*) n FROM sale_items i JOIN sales s ON s.id=i.sale_id WHERE s.branch_id=? AND i.historical_cost_known=0 AND ((s.created_at>=? AND s.created_at<?) OR EXISTS (SELECT 1 FROM return_items ri JOIN returns r ON r.id=ri.return_id WHERE ri.sale_item_id=i.id AND r.created_at>=? AND r.created_at<?))",
+        branchId,
         range.previous_start,
         range.end,
         range.previous_start,
@@ -308,65 +341,88 @@ export class Queries {
       delete metrics.cogs;
     }
     const timezone = this.readSettings().timezone;
-    const lineEvents = `SELECT i.product_id,i.product_name name,i.category_name category,s.created_at,i.net_total-i.tax_amount revenue,i.unit_cost*i.quantity cost,i.historical_cost_known known FROM sale_items i JOIN sales s ON s.id=i.sale_id UNION ALL SELECT i.product_id,i.product_name,i.category_name,r.created_at,-(ri.amount-ri.tax_amount),-i.unit_cost*ri.quantity,i.historical_cost_known FROM return_items ri JOIN sale_items i ON i.id=ri.sale_item_id JOIN returns r ON r.id=ri.return_id`;
+    const lineEvents = `SELECT i.product_id,i.product_name name,i.category_name category,s.branch_id,s.created_at,i.net_total-i.tax_amount revenue,i.unit_cost*i.quantity cost,i.historical_cost_known known FROM sale_items i JOIN sales s ON s.id=i.sale_id UNION ALL SELECT i.product_id,i.product_name,i.category_name,s.branch_id,r.created_at,-(ri.amount-ri.tax_amount),-i.unit_cost*ri.quantity,i.historical_cost_known FROM return_items ri JOIN sale_items i ON i.id=ri.sale_item_id JOIN returns r ON r.id=ri.return_id JOIN sales s ON s.id=i.sale_id`;
     const permissions = this.auth.require().permissions;
+    metrics.appointments_today = Number(
+      this.store.get(
+        "SELECT count(*) n FROM appointments WHERE starts_at>=? AND starts_at<? AND branch_id=? AND status NOT IN ('cancelled','no_show')",
+        range.start,
+        range.end,
+        branchId,
+      )?.n,
+    );
+    metrics.lab_pending = Number(
+      this.store.get(
+        "SELECT count(*) n FROM lab_orders WHERE branch_id=? AND status NOT IN ('delivered','cancelled')",
+        branchId,
+      )?.n,
+    );
     return {
       range,
       metrics,
       unknown_costs: unknownCosts,
       profit_trend: profitAllowed
         ? this.store.all(
-            `SELECT business_date(created_at,?) day,CASE WHEN min(known)=0 THEN NULL ELSE sum(revenue-cost) END amount FROM (${lineEvents}) WHERE created_at>=? AND created_at<? GROUP BY day ORDER BY day`,
+            `SELECT business_date(created_at,?) day,CASE WHEN min(known)=0 THEN NULL ELSE sum(revenue-cost) END amount FROM (${lineEvents}) WHERE created_at>=? AND created_at<? AND branch_id=? GROUP BY day ORDER BY day`,
             timezone,
             range.start,
             range.end,
+            branchId,
           )
         : [],
       top_products: this.store.all(
-        `SELECT product_id id,name,sum(revenue) amount FROM (${lineEvents}) WHERE created_at>=? AND created_at<? GROUP BY product_id ORDER BY amount DESC,id LIMIT 10`,
+        `SELECT product_id id,name,sum(revenue) amount FROM (${lineEvents}) WHERE created_at>=? AND created_at<? AND branch_id=? GROUP BY product_id ORDER BY amount DESC,id LIMIT 10`,
         range.start,
         range.end,
+        branchId,
       ),
       top_categories: this.store.all(
-        `SELECT COALESCE(category,'—') name,sum(revenue) amount FROM (${lineEvents}) WHERE created_at>=? AND created_at<? GROUP BY category ORDER BY amount DESC,name LIMIT 10`,
+        `SELECT COALESCE(category,'—') name,sum(revenue) amount FROM (${lineEvents}) WHERE created_at>=? AND created_at<? AND branch_id=? GROUP BY category ORDER BY amount DESC,name LIMIT 10`,
         range.start,
         range.end,
+        branchId,
       ),
       recent_sales: permissions.includes("sales.view")
         ? this.store.all(
-            `SELECT id,invoice_number,total FROM sales WHERE created_at>=? AND created_at<? ORDER BY created_at DESC,id LIMIT 10`,
+            `SELECT id,invoice_number,total FROM sales WHERE created_at>=? AND created_at<? AND branch_id=? ORDER BY created_at DESC,id LIMIT 10`,
             range.start,
             range.end,
+            branchId,
           )
         : [],
       recent_payments: permissions.includes("payments.view")
         ? this.store.all(
-            `SELECT p.id,s.invoice_number,p.method,p.amount FROM payments p JOIN sales s ON s.id=p.sale_id WHERE p.created_at>=? AND p.created_at<? ORDER BY p.created_at DESC,p.id LIMIT 10`,
+            `SELECT p.id,s.invoice_number,p.method,p.amount FROM payments p JOIN sales s ON s.id=p.sale_id WHERE p.created_at>=? AND p.created_at<? AND s.branch_id=? ORDER BY p.created_at DESC,p.id LIMIT 10`,
             range.start,
             range.end,
+            branchId,
           )
         : [],
       outstanding: permissions.includes("reports.view")
         ? this.store.all(
-            `SELECT c.id,c.name,sum(${balanceSql}) balance FROM sales s JOIN customers c ON c.id=s.customer_id GROUP BY c.id HAVING balance>0 ORDER BY balance DESC,c.id LIMIT 10`,
+            `SELECT c.id,c.name,sum(${balanceSql}) balance FROM sales s JOIN customers c ON c.id=s.customer_id WHERE s.branch_id=? GROUP BY c.id HAVING balance>0 ORDER BY balance DESC,c.id LIMIT 10`,
+            branchId,
           )
         : [],
       trend: this.store.all(
-        "SELECT business_date(created_at,?) day,sum(revenue) revenue,sum(sales_count) sales FROM (SELECT created_at,total-tax revenue,1 sales_count FROM sales UNION ALL SELECT r.created_at,-sum(ri.amount-ri.tax_amount) revenue,0 sales_count FROM returns r JOIN return_items ri ON ri.return_id=r.id GROUP BY r.id) WHERE created_at>=? AND created_at<? GROUP BY business_date(created_at,?) ORDER BY day",
+        "SELECT business_date(created_at,?) day,sum(revenue) revenue,sum(sales_count) sales FROM (SELECT branch_id,created_at,total-tax revenue,1 sales_count FROM sales UNION ALL SELECT s.branch_id,r.created_at,-sum(ri.amount-ri.tax_amount) revenue,0 sales_count FROM returns r JOIN return_items ri ON ri.return_id=r.id JOIN sales s ON s.id=r.sale_id GROUP BY r.id) WHERE created_at>=? AND created_at<? AND branch_id=? GROUP BY business_date(created_at,?) ORDER BY day",
         timezone,
         range.start,
         range.end,
+        branchId,
         timezone,
       ),
       by_type: this.store.all(
-        "SELECT name,sum(amount) amount FROM (SELECT i.product_type name,i.net_total-i.tax_amount amount,s.created_at FROM sale_items i JOIN sales s ON s.id=i.sale_id UNION ALL SELECT i.product_type,-(ri.amount-ri.tax_amount),r.created_at FROM return_items ri JOIN sale_items i ON i.id=ri.sale_item_id JOIN returns r ON r.id=ri.return_id) WHERE created_at>=? AND created_at<? GROUP BY name",
+        "SELECT name,sum(amount) amount FROM (SELECT i.product_type name,i.net_total-i.tax_amount amount,s.branch_id,s.created_at FROM sale_items i JOIN sales s ON s.id=i.sale_id UNION ALL SELECT i.product_type,-(ri.amount-ri.tax_amount),s.branch_id,r.created_at FROM return_items ri JOIN sale_items i ON i.id=ri.sale_item_id JOIN returns r ON r.id=ri.return_id JOIN sales s ON s.id=i.sale_id) WHERE created_at>=? AND created_at<? AND branch_id=? GROUP BY name",
         range.start,
         range.end,
+        branchId,
       ),
       payment_methods: this.store.all(
-        "SELECT method name,sum(amount) amount FROM payments WHERE created_at>=? AND created_at<? GROUP BY method",
+        "SELECT p.method name,sum(p.amount) amount FROM payments p JOIN sales s ON s.id=p.sale_id WHERE p.created_at>=? AND p.created_at<? AND s.branch_id=? GROUP BY p.method",
         range.start,
         range.end,
+        branchId,
       ),
     };
   }

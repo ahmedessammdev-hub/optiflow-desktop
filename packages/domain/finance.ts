@@ -10,7 +10,7 @@ import {
   text,
 } from "../shared/schemas";
 import { allocate, checked, totals } from "../shared/money";
-import { moveStock } from "./stock";
+import { activeBranchId, moveStock } from "./stock";
 export function saleBalance(store: Store, saleId: string) {
   const sale = store.get("SELECT total FROM sales WHERE id=?", saleId);
   if (!sale) throw new Error("Invoice not found");
@@ -49,7 +49,8 @@ export function cashEntry(
   userId: string,
 ) {
   const session = store.get(
-    "SELECT id FROM cash_sessions WHERE closed_at IS NULL",
+    "SELECT id FROM cash_sessions WHERE closed_at IS NULL AND branch_id=?",
+    activeBranchId(store),
   );
   if (!session)
     throw new Error("Open the cash drawer before recording cash transactions");
@@ -81,6 +82,7 @@ export class Finance {
     const data = saleSchema.parse(input);
     if (data.discount) this.auth.require("sales.discount");
     return this.store.tx(() => {
+      const branchId = activeBranchId(this.store);
       const existing = this.store.get(
         "SELECT id FROM sales WHERE request_id=?",
         data.request_id,
@@ -105,7 +107,8 @@ export class Finance {
         throw new Error("Prescription does not belong to this customer");
       const products = data.items.map((item) => {
         const p = this.store.get(
-          "SELECT p.*,COALESCE(c.name,'') category_name FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.id=? AND p.archived_at IS NULL",
+          "SELECT p.*,COALESCE(c.name,'') category_name,COALESCE(bs.quantity,0) stock_quantity FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN branch_stock bs ON bs.product_id=p.id AND bs.branch_id=? WHERE p.id=? AND p.archived_at IS NULL",
+          branchId,
           item.product_id,
         );
         if (!p) throw new Error("Product not found or archived");
@@ -150,6 +153,7 @@ export class Finance {
         ...amounts,
         notes: data.notes,
         created_at: now,
+        branch_id: branchId,
       });
       const weights = products.map((p) => p.unit_price * p.quantity);
       const discounts = allocate(data.discount, weights);
@@ -183,6 +187,7 @@ export class Finance {
           saleId,
           "Checkout",
           user.id,
+          branchId,
         );
       });
       for (const payment of data.payments)
@@ -305,6 +310,10 @@ export class Finance {
       throw new Error("Duplicate return line");
     return this.store.tx(() => {
       const balance = saleBalance(this.store, data.sale_id);
+      const sale = this.store.get(
+        "SELECT branch_id FROM sales WHERE id=?",
+        data.sale_id,
+      );
       const returnId = randomUUID();
       const now = new Date().toISOString();
       let total = 0;
@@ -366,6 +375,7 @@ export class Finance {
             returnId,
             data.reason,
             user.id,
+            String(sale?.branch_id ?? activeBranchId(this.store)),
           );
       }
       const refund = Math.max(0, total - balance.balance);

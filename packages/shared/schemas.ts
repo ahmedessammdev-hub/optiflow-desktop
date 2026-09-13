@@ -72,6 +72,7 @@ export const productSchema = z.object({
   color: text.default(""),
   size: text.default(""),
   supplier_id: id.nullable().default(null),
+  parent_product_id: id.nullable().default(null),
   unit_cost: money,
   unit_price: money,
   reorder_level: z.number().int().min(0).nullable().default(null),

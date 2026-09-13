@@ -11,6 +11,19 @@ import "./styles.css";
 const DashboardPage = lazy(() =>
   import("./features/dashboard").then((m) => ({ default: m.DashboardPage })),
 );
+const FulfillmentPage = lazy(() =>
+  import("./features/fulfillment").then((m) => ({
+    default: m.FulfillmentPage,
+  })),
+);
+const QuotesPage = lazy(() =>
+  import("./features/quotes").then((m) => ({ default: m.QuotesPage })),
+);
+const InventoryControlPage = lazy(() =>
+  import("./features/inventory-control").then((m) => ({
+    default: m.InventoryControlPage,
+  })),
+);
 class ErrorBoundary extends Component<
   { children: ReactNode },
   { error: string }
@@ -125,9 +138,17 @@ const navigation = [
   ["dashboard", "Overview", "نظرة عامة", "dashboard.view"],
   ["pos", "Point of sale", "نقطة البيع", "sales.create"],
   ["customers", "Customers", "العملاء", "customers.view"],
+  ["fulfillment", "Customer fulfilment", "خدمة العميل", "customers.view"],
+  ["quotes", "Quotes & reservations", "العروض والحجوزات", "sales.view"],
   ["products", "Products", "المنتجات", "products.view"],
   ["categories", "Categories", "الفئات", "products.view"],
   ["inventory", "Inventory", "المخزون", "inventory.view"],
+  [
+    "inventory_control",
+    "Inventory control",
+    "الرقابة على المخزون",
+    "inventory.view",
+  ],
   ["suppliers", "Suppliers", "الموردون", "purchases.view"],
   ["purchases", "Purchases", "المشتريات", "purchases.view"],
   ["sales", "Invoices", "الفواتير", "sales.view"],
@@ -142,8 +163,14 @@ const navigation = [
   ["settings", "Settings & help", "الإعدادات", ""],
 ] as const;
 function Shell({ logout }: { logout: () => void }) {
-  const { t, can, settings, user } = useApp();
+  const { t, can, settings, user, run } = useApp();
   const logo = useData("store.logo");
+  const branches = useData("branches.list", undefined, can("inventory.view"));
+  const activeBranch = useData(
+    "branches.active",
+    undefined,
+    can("inventory.view"),
+  );
   const available = navigation.filter((n) => !n[3] || can(n[3]));
   const [page, setPage] = useState<string>(available[0][0]);
   let screen: ReactNode;
@@ -153,6 +180,15 @@ function Shell({ logout }: { logout: () => void }) {
       break;
     case "pos":
       screen = <POS />;
+      break;
+    case "fulfillment":
+      screen = <FulfillmentPage />;
+      break;
+    case "quotes":
+      screen = <QuotesPage />;
+      break;
+    case "inventory_control":
+      screen = <InventoryControlPage />;
       break;
     case "customers":
     case "products":
@@ -222,6 +258,23 @@ function Shell({ logout }: { logout: () => void }) {
       <main className="workspace">
         <div className="topbar">
           <span>{t("Shop workspace", "مساحة عمل المحل")}</span>
+          {can("inventory.view") && (
+            <label>
+              {t("Branch", "الفرع")}:{" "}
+              <select
+                value={String(activeBranch.data?.id ?? "")}
+                onChange={(event) =>
+                  run(() => api("branches.select", event.target.value))
+                }
+              >
+                {(branches.data ?? []).map((branch) => (
+                  <option key={String(branch.id)} value={String(branch.id)}>
+                    {String(branch.name)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <span className="local-status">
             <i />
             {t("Local database", "قاعدة بيانات محلية")}

@@ -13,6 +13,7 @@ import {
   type Page,
   type Prescription,
 } from "../shared/schemas";
+import { activeBranchId } from "./stock";
 export class Catalog {
   constructor(
     private store: Store,
@@ -95,6 +96,17 @@ export class Catalog {
             )
           )
             throw new Error("Invalid category or supplier");
+        if (values.parent_product_id) {
+          if (values.parent_product_id === envelope.id)
+            throw new Error("A product cannot be its own parent");
+          if (
+            !this.store.get(
+              "SELECT id FROM products WHERE id=? AND archived_at IS NULL",
+              values.parent_product_id,
+            )
+          )
+            throw new Error("Invalid parent product");
+        }
       }
       const entityId = envelope.id ?? randomUUID();
       const now = new Date().toISOString();
@@ -121,6 +133,11 @@ export class Catalog {
         if (kind === "customers")
           extra.customer_code = `C-${entityId.slice(0, 8).toUpperCase()}`;
         this.store.insert(kind, { ...values, ...extra });
+        if (kind === "products")
+          this.store.run(
+            "INSERT INTO branch_stock(branch_id,product_id,quantity) SELECT id,?,0 FROM branches",
+            entityId,
+          );
       }
       this.store.audit(
         user.id,
@@ -193,6 +210,20 @@ export class Catalog {
       q.page_size,
       (q.page - 1) * q.page_size,
     );
+    if (kind === "products" && rows.length) {
+      const quantities = new Map(
+        this.store
+          .all(
+            `SELECT product_id,quantity FROM branch_stock WHERE branch_id=? AND product_id IN (${rows.map(() => "?").join(",")})`,
+            activeBranchId(this.store),
+            ...rows.map((row) => row.id),
+          )
+          .map((row) => [String(row.product_id), Number(row.quantity)]),
+      );
+      rows.forEach((row) => {
+        row.stock_quantity = quantities.get(String(row.id)) ?? 0;
+      });
+    }
     if (
       kind === "products" &&
       !this.auth.require().permissions.includes("reports.profit")

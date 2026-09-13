@@ -13,9 +13,15 @@
 10. Add suppliers and purchase orders. Receive stock once the goods arrive. Record expenses separately. Close the drawer using actual counted cash; the expected/actual difference is retained.
 11. Use table searches and date filters, reports, CSV export and dashboard refresh. Dashboard updates after mutations. Profit is unavailable when imported historical costs are unknown.
 12. Create a backup in Settings before upgrades or data import. Test restoration using a separate test data directory before depending on a backup.
+13. Use Customer fulfilment for appointments, lab orders, repairs/warranty work and scheduled customer follow-ups. Statuses follow controlled transitions and due reminders appear in-app and as native notifications.
+14. Use Quotes & reservations to create an expiring quote, optionally reserve its stock, take a deposit, and convert it once into a normal invoice. Cancelling releases reserved stock and records a matching deposit refund; cash refunds require an open drawer with sufficient funds.
+15. Use Inventory control to run a physical stocktake, post supplier returns against received purchases, print scannable Code 39 labels and transfer stock between branches.
+16. Choose the active branch in the top bar before operating. Sales, purchasing, cash drawers, fulfilment, stock and reports are attributed to that branch. Product master data and customer history remain shared across branches.
 
 F2 focuses POS product search. F4 focuses customer search. Ctrl+Enter completes a valid POS checkout. Ctrl+P prints the open invoice. Escape closes a dialog. Avoid entering money with more than two decimal places. Historical records are archived or reversed, not deleted.
 
 Purchase details show the supplier payment ledger and accept additional payments up to the outstanding balance. User administration supports account archiving, password reset and editing non-administrator role permissions; last-administrator protection is enforced. Customer profiles and products support managed image/PDF attachments; purchase details and expense rows also support receipts. Images are resized on import and managed attachments are included in backups.
 
 Reports include product/category performance, profit, stock valuation, low stock and supplier balances. Expand Filters for the filters supported by each report. Purchase and return records have printable documents. Customer invoice history is paginated. Settings includes automatic backup interval, retention and destination, plus legacy JSON import with a reconciliation report. Test imported data before relying on it; unknown historical costs remain unknown.
+
+The local application writes immutable synchronization-outbox events for operational mutations. Actual cloud synchronization is not enabled until a deployment supplies a server URL, authentication/tenant model and conflict policy.

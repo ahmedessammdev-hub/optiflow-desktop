@@ -26,6 +26,6 @@ npm run package
 
 Installer output is in `release/`. App data lives in Electron's userData directory, separately from installation. See Settings & Help for exact local paths. `npm run package:dir` creates an unpacked build. Database migrations run automatically and verify checksums at startup.
 
-See [user guide](docs/user-guide.md), [developer guide](docs/developer-guide.md), [architecture](docs/architecture.md), [legacy audit](docs/current-system-audit.md), [migration guide](docs/legacy-migration.md), [printing](docs/printing-design.md), [backup/restore](docs/backup-restore.md) and [release status](docs/release-status.md).
+See [user guide](docs/user-guide.md), [feature expansion plan](docs/feature-expansion-plan.md), [developer guide](docs/developer-guide.md), [architecture](docs/architecture.md), [legacy audit](docs/current-system-audit.md), [migration guide](docs/legacy-migration.md), [printing](docs/printing-design.md), [backup/restore](docs/backup-restore.md) and [release status](docs/release-status.md).
 
 This repository's release status records verified coverage and remaining gaps. Do not assume every requirement in the master brief is complete merely because the application builds.

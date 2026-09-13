@@ -23,7 +23,9 @@ export function PurchaseDetail({
           <AttachmentPanel entityType="purchase_orders" entityId={purchaseId} />
           <p>
             {t("Outstanding balance", "الرصيد المستحق")}:{" "}
-            <Money value={Number(p.total) - Number(p.paid)} />
+            <Money
+              value={Number(p.total) - Number(p.paid) - Number(p.returned)}
+            />
           </p>
           <DataTable
             rows={
@@ -55,12 +57,26 @@ export function PurchaseDetail({
               { key: "created_at", label: t("Date", "التاريخ") },
             ]}
           />
+          <h3>{t("Supplier returns", "مرتجعات المورد")}</h3>
+          <DataTable
+            rows={data.data?.returns ?? []}
+            columns={[
+              {
+                key: "total",
+                label: t("Credit", "الرصيد الدائن"),
+                render: (r) => <Money value={r.total} />,
+              },
+              { key: "reason", label: t("Reason", "السبب") },
+              { key: "created_at", label: t("Date", "التاريخ") },
+            ]}
+          />
           <div className="actions">
-            {can("purchases.create") && Number(p.paid) < Number(p.total) && (
-              <button onClick={() => setPayment(true)}>
-                {t("Record supplier payment", "تسجيل دفعة للمورد")}
-              </button>
-            )}
+            {can("purchases.create") &&
+              Number(p.paid) + Number(p.returned) < Number(p.total) && (
+                <button onClick={() => setPayment(true)}>
+                  {t("Record supplier payment", "تسجيل دفعة للمورد")}
+                </button>
+              )}
             <button
               onClick={() =>
                 run(() =>

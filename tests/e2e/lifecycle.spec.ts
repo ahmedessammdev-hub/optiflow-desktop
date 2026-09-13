@@ -58,6 +58,24 @@ test("desktop lifecycle, IPC security, print preview and persistence", async () 
     return { customer, prescription, product };
   });
   await page
+    .getByRole("button", { name: "Customer fulfilment", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Customer fulfilment" }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Quotes & reservations", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Quotes & reservations" }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Inventory control", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Inventory control" }),
+  ).toBeVisible();
+  await page
     .getByRole("button", { name: "Point of sale", exact: true })
     .click();
   await page.getByPlaceholder("Scan barcode or search products").fill("123456");

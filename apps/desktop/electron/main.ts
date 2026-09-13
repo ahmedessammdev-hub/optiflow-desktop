@@ -1,4 +1,11 @@
-import { app, BrowserWindow, ipcMain, dialog, session } from "electron";
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  dialog,
+  session,
+  Notification,
+} from "electron";
 import { join, resolve } from "node:path";
 import {
   mkdirSync,
@@ -48,6 +55,43 @@ function secure(window: BrowserWindow) {
     event.preventDefault(),
   );
 }
+function checkReminders() {
+  const now = new Date().toISOString();
+  service.store.run(
+    "UPDATE quotes SET status='expired' WHERE status='draft' AND expires_at IS NOT NULL AND expires_at<date('now')",
+  );
+  service.store.run(
+    "UPDATE stock_reservations SET status='released' WHERE status='active' AND quote_id IN (SELECT id FROM quotes WHERE status='expired')",
+  );
+  const rows = service.store.all(
+    `SELECT a.id,'appointments' kind,c.name,a.purpose details,a.starts_at due FROM appointments a JOIN customers c ON c.id=a.customer_id WHERE a.status IN ('scheduled','confirmed') AND a.reminder_at IS NOT NULL AND a.reminder_at<=? AND a.reminder_sent_at IS NULL UNION ALL SELECT f.id,'customer_followups',c.name,f.type,f.due_at FROM customer_followups f JOIN customers c ON c.id=f.customer_id WHERE f.status='pending' AND f.due_at<=? AND f.reminder_sent_at IS NULL`,
+    now,
+    now,
+  );
+  for (const row of rows) {
+    const ar = service.queries.readSettings().language === "ar";
+    const message = ar
+      ? `تذكير: ${row.name} · ${row.details} · ${row.due}`
+      : `Reminder: ${row.name} · ${row.details} · ${row.due}`;
+    mainWindow.webContents.send("optical:notification", message);
+    if (Notification.isSupported())
+      new Notification({
+        title: ar ? "البصريات" : "Optical Desktop",
+        body: message,
+      }).show();
+    service.store.run(
+      `UPDATE ${row.kind} SET reminder_sent_at=? WHERE id=?`,
+      now,
+      row.id,
+    );
+    service.store.audit(
+      null,
+      "reminder_sent",
+      String(row.kind),
+      String(row.id),
+    );
+  }
+}
 async function preview(input: unknown) {
   service.auth.require();
   const request = z
@@ -59,6 +103,7 @@ async function preview(input: unknown) {
         "statement",
         "purchase",
         "return",
+        "labels",
       ]),
       id,
     })
@@ -66,7 +111,15 @@ async function preview(input: unknown) {
   let data: PrintData = { kind: request.kind };
   if (request.kind === "invoice" || request.kind === "comprehensive")
     data = { ...data, invoice: service.finance.invoice(request.id) };
-  else if (request.kind === "purchase") {
+  else if (request.kind === "labels") {
+    service.auth.require("products.view");
+    const product = service.store.get(
+      "SELECT id,name,sku,barcode,unit_price FROM products WHERE id=?",
+      request.id,
+    );
+    if (!product) throw new Error("Product not found");
+    data = { ...data, labels: Array.from({ length: 12 }, () => product) };
+  } else if (request.kind === "purchase") {
     const p = service.operations.purchaseDetail(request.id);
     data = {
       ...data,
@@ -401,6 +454,9 @@ else
       automatic();
       const timer = setInterval(automatic, 60000);
       timer.unref();
+      checkReminders();
+      const reminderTimer = setInterval(checkReminders, 60000);
+      reminderTimer.unref();
       let quitting = false;
       app.on("before-quit", (event) => {
         if (quitting) return;

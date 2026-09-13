@@ -2,6 +2,7 @@ import { Store } from "../database/database";
 import { Auth } from "./auth";
 import { querySchema, type Page } from "../shared/schemas";
 import { utcBoundary, addDays } from "../shared/dates";
+import { activeBranchId } from "./stock";
 export const analyticalReports = [
   "profit",
   "product_performance",
@@ -33,19 +34,19 @@ export function analyticalReport(
   let sql: string;
   if (kind === "stock" || kind === "low_stock") {
     sql =
-      "SELECT p.id,p.name,p.sku,p.type,p.stock_quantity,COALESCE(p.reorder_level,c.reorder_level,?) reorder_level FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.archived_at IS NULL AND p.name LIKE ?";
-    params.push(reorder, `%${q.search}%`);
+      "SELECT p.id,p.name,p.sku,p.type,COALESCE(s.quantity,0) stock_quantity,COALESCE(p.reorder_level,c.reorder_level,?) reorder_level FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN branch_stock s ON s.product_id=p.id AND s.branch_id=? WHERE p.archived_at IS NULL AND p.name LIKE ?";
+    params.push(reorder, activeBranchId(store), `%${q.search}%`);
     if (kind === "low_stock") {
       sql +=
-        " AND p.stock_quantity<=COALESCE(p.reorder_level,c.reorder_level,?)";
+        " AND COALESCE(s.quantity,0)<=COALESCE(p.reorder_level,c.reorder_level,?)";
       params.push(reorder);
     }
   } else if (kind === "supplier_balances") {
-    sql = `SELECT s.id,s.name,COALESCE(sum(p.total),0) total,COALESCE(sum(p.paid),0) paid,COALESCE(sum(p.total-p.paid),0) balance FROM suppliers s LEFT JOIN purchase_orders p ON p.supplier_id=s.id WHERE s.name LIKE ? GROUP BY s.id`;
-    params.push(`%${q.search}%`);
+    sql = `SELECT s.id,s.name,COALESCE(sum(p.total),0) total,COALESCE(sum(p.paid),0) paid,COALESCE(sum((p.total-p.paid)-COALESCE((SELECT sum(sr.total) FROM supplier_returns sr WHERE sr.purchase_id=p.id AND sr.status='posted'),0)),0) balance FROM suppliers s LEFT JOIN purchase_orders p ON p.supplier_id=s.id AND p.branch_id=? WHERE s.name LIKE ? GROUP BY s.id`;
+    params.push(activeBranchId(store), `%${q.search}%`);
   } else {
-    const clauses = ["name LIKE ?"];
-    params.push(`%${q.search}%`);
+    const clauses = ["name LIKE ?", "branch_id=?"];
+    params.push(`%${q.search}%`, activeBranchId(store));
     if (q.from) {
       clauses.push("created_at>=?");
       params.push(utcBoundary(q.from, timezone));
@@ -64,7 +65,7 @@ export function analyticalReport(
         clauses.push(`${key}=?`);
         params.push(q[key]!);
       }
-    const events = `SELECT i.product_id,i.product_name name,i.category_name category,i.category_id,s.customer_id,s.seller_id employee_id,s.created_at,i.quantity quantity,i.net_total-i.tax_amount revenue,i.unit_cost*i.quantity cost,i.historical_cost_known known FROM sale_items i JOIN sales s ON s.id=i.sale_id UNION ALL SELECT i.product_id,i.product_name,i.category_name,i.category_id,s.customer_id,s.seller_id,r.created_at,-ri.quantity,-(ri.amount-ri.tax_amount),-i.unit_cost*ri.quantity,i.historical_cost_known FROM return_items ri JOIN sale_items i ON i.id=ri.sale_item_id JOIN returns r ON r.id=ri.return_id JOIN sales s ON s.id=i.sale_id`;
+    const events = `SELECT i.product_id,i.product_name name,i.category_name category,i.category_id,s.customer_id,s.seller_id employee_id,s.branch_id,s.created_at,i.quantity quantity,i.net_total-i.tax_amount revenue,i.unit_cost*i.quantity cost,i.historical_cost_known known FROM sale_items i JOIN sales s ON s.id=i.sale_id UNION ALL SELECT i.product_id,i.product_name,i.category_name,i.category_id,s.customer_id,s.seller_id,s.branch_id,r.created_at,-ri.quantity,-(ri.amount-ri.tax_amount),-i.unit_cost*ri.quantity,i.historical_cost_known FROM return_items ri JOIN sale_items i ON i.id=ri.sale_item_id JOIN returns r ON r.id=ri.return_id JOIN sales s ON s.id=i.sale_id`;
     const group =
       kind === "category_performance"
         ? "category"

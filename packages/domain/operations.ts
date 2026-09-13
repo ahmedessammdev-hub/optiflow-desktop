@@ -2,10 +2,10 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { Store } from "../database/database";
 import { Auth } from "./auth";
-import { id, money, methods, text } from "../shared/schemas";
+import { id, money, methods, text, type Row } from "../shared/schemas";
 import { checked } from "../shared/money";
 import { cashEntry } from "./finance";
-import { moveStock } from "./stock";
+import { activeBranchId, moveStock } from "./stock";
 export class Operations {
   constructor(
     private store: Store,
@@ -65,6 +65,7 @@ export class Operations {
         opened_by: user.id,
         opening_balance: amount,
         opened_at: new Date().toISOString(),
+        branch_id: activeBranchId(this.store),
       });
       cashEntry(
         this.store,
@@ -83,7 +84,8 @@ export class Operations {
   cash() {
     this.auth.require("cash.view");
     const session = this.store.get(
-      "SELECT * FROM cash_sessions WHERE closed_at IS NULL",
+      "SELECT * FROM cash_sessions WHERE closed_at IS NULL AND branch_id=?",
+      activeBranchId(this.store),
     );
     return {
       session: session ?? null,
@@ -171,6 +173,7 @@ export class Operations {
         ...data,
         user_id: user.id,
         created_at: new Date().toISOString(),
+        branch_id: activeBranchId(this.store),
       });
       if (data.method === "cash")
         cashEntry(
@@ -236,6 +239,7 @@ export class Operations {
         notes: data.notes,
         created_by: user.id,
         created_at: new Date().toISOString(),
+        branch_id: activeBranchId(this.store),
       });
       for (const item of data.items) {
         const product = this.store.get(
@@ -296,6 +300,7 @@ export class Operations {
           purchaseId,
           "Purchase receipt",
           user.id,
+          String(purchase.branch_id ?? activeBranchId(this.store)),
         );
         this.store.run(
           "UPDATE products SET unit_cost=? WHERE id=?",
@@ -339,7 +344,13 @@ export class Operations {
           data.purchase_id,
         )?.n,
       );
-      if (data.amount > Number(purchase.total) - paid)
+      const returned = Number(
+        this.store.get(
+          "SELECT COALESCE(sum(total),0) n FROM supplier_returns WHERE purchase_id=? AND status='posted'",
+          data.purchase_id,
+        )?.n,
+      );
+      if (data.amount > Number(purchase.total) - returned - paid)
         throw new Error("Supplier payment exceeds balance");
       const paymentId = randomUUID();
       this.store.insert("supplier_payments", {
@@ -380,14 +391,27 @@ export class Operations {
       purchaseId,
     );
     if (!purchase) throw new Error("Purchase not found");
+    const purchaseWithReturns: Row = {
+      ...purchase,
+      returned: Number(
+        this.store.get(
+          "SELECT COALESCE(sum(total),0) n FROM supplier_returns WHERE purchase_id=? AND status='posted'",
+          purchaseId,
+        )?.n,
+      ),
+    };
     return {
-      purchase,
+      purchase: purchaseWithReturns,
       items: this.store.all(
         "SELECT * FROM purchase_items WHERE purchase_id=?",
         purchaseId,
       ),
       payments: this.store.all(
         "SELECT * FROM supplier_payments WHERE purchase_id=? ORDER BY created_at",
+        purchaseId,
+      ),
+      returns: this.store.all(
+        "SELECT * FROM supplier_returns WHERE purchase_id=? ORDER BY created_at",
         purchaseId,
       ),
     };
