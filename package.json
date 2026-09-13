@@ -6,6 +6,7 @@
   "author": "Optical Desktop",
   "main": "dist-electron/main.cjs",
   "scripts": {
+    "maintenance": "node dist-electron/maintenance.cjs",
     "dev": "npm run build && electron .",
     "build": "tsc --noEmit && vite build && node scripts/build-electron.mjs",
     "format": "prettier --write apps packages tests scripts *.ts *.mjs *.json docs/*.md README.md",
@@ -47,11 +48,31 @@
   "build": {
     "appId": "com.optical.desktop",
     "productName": "Optical Desktop",
-    "directories": { "output": "release" },
-    "files": ["dist/**/*", "dist-electron/**/*", "package.json"],
-    "extraResources": [{ "from": "packages/database/migrations", "to": "migrations" }],
-    "asarUnpack": ["**/*.node"],
-    "win": { "target": "nsis", "icon": "assets/icon.ico" },
-    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "deleteAppDataOnUninstall": false }
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "packages/database/migrations",
+        "to": "migrations"
+      }
+    ],
+    "asarUnpack": [
+      "**/*.node"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false
+    }
   }
 }

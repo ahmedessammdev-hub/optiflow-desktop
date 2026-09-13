@@ -1,2 +1,22 @@
-import type { Settings } from './schemas';
-export const defaultSettings: Settings = { store_name:'Optical',store_name_ar:'البصريات',address:'',phone:'',tax_number:'',currency:'EGP',language:'en',timezone:'Africa/Cairo',reorder_level:5,header:'',footer:'Thank you for your visit',paper:'A4',copies:1,margin:10,show_prices:true,show_phone:true,show_seller:true,show_prescription:true,default_printer:'' };
+import type { Settings } from "./schemas";
+export const defaultSettings: Settings = {
+  store_name: "Optical",
+  store_name_ar: "البصريات",
+  address: "",
+  phone: "",
+  tax_number: "",
+  currency: "EGP",
+  language: "en",
+  timezone: "Africa/Cairo",
+  reorder_level: 5,
+  header: "",
+  footer: "Thank you for your visit",
+  paper: "A4",
+  copies: 1,
+  margin: 10,
+  show_prices: true,
+  show_phone: true,
+  show_seller: true,
+  show_prescription: true,
+  default_printer: "",
+};
