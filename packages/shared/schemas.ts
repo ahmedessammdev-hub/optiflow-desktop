@@ -131,7 +131,9 @@ export const settingsSchema = z.object({
   store_name_ar: text.default(""),
   address: text.default(""),
   phone: text.default(""),
+  secondary_phone: text.default(""),
   tax_number: text.default(""),
+  commercial_registration: text.default(""),
   currency: z
     .string()
     .regex(/^[A-Z]{3}$/)

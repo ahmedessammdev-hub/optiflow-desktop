@@ -143,6 +143,7 @@ const navigation = [
 ] as const;
 function Shell({ logout }: { logout: () => void }) {
   const { t, can, settings, user } = useApp();
+  const logo = useData("store.logo");
   const available = navigation.filter((n) => !n[3] || can(n[3]));
   const [page, setPage] = useState<string>(available[0][0]);
   let screen: ReactNode;
@@ -191,7 +192,7 @@ function Shell({ logout }: { logout: () => void }) {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <span>◎—◎</span>
+          {logo.data ? <img src={logo.data} alt="" /> : <span>◎—◎</span>}
           <div>
             <strong>
               {settings.language === "ar"

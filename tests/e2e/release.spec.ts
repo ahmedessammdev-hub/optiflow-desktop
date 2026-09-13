@@ -59,11 +59,17 @@ test("release: attachments, Arabic PDF, backup restore, purchase ledger and perm
       od: { sph: 0, pd: 31 },
       os: { pd: 32 },
     });
+    const expense = await api.invoke("expenses.create", {
+      category: "Utilities",
+      amount: 250,
+      method: "card",
+      description: "Internet receipt",
+    });
     await api.invoke("settings.save", {
       ...(await api.invoke("settings.get")),
       language: "ar",
     });
-    return { customer, product, purchase, prescription };
+    return { customer, product, purchase, prescription, expense };
   });
   const attachment = join(folder, "receipt.pdf");
   writeFileSync(attachment, "%PDF-1.4\nTest receipt");
@@ -93,6 +99,46 @@ test("release: attachments, Arabic PDF, backup restore, purchase ledger and perm
       ids,
     ),
   ).toBe(1);
+  await page.getByRole("button", { name: "Expenses", exact: true }).click();
+  await expect(
+    page.getByText("Internet receipt", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Receipt", exact: true }).click();
+  await page.getByRole("button", { name: "Add image / PDF" }).click();
+  await expect(page.getByRole("button", { name: "receipt.pdf" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  expect(
+    await page.evaluate(
+      async (ids) =>
+        (
+          await window.optical.invoke("attachments.list", {
+            entity_type: "expenses",
+            entity_id: ids.expense,
+          })
+        ).length,
+      ids,
+    ),
+  ).toBe(1);
+  const logo = join(folder, "logo.png");
+  writeFileSync(
+    logo,
+    Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+      "base64",
+    ),
+  );
+  await app.evaluate(({ dialog }, file) => {
+    dialog.showOpenDialog = async () => ({
+      canceled: false,
+      filePaths: [file],
+    });
+  }, logo);
+  await page.evaluate(() =>
+    window.optical.invoke("attachments.add", {
+      entity_type: "store_settings",
+      entity_id: "00000000-0000-4000-8000-000000000001",
+    }),
+  );
   await page.evaluate(
     async (ids) =>
       window.optical.invoke("print.preview", {
@@ -104,6 +150,7 @@ test("release: attachments, Arabic PDF, backup restore, purchase ledger and perm
   const preview = app.windows().find((p) => p !== page)!;
   await preview.waitForLoadState();
   await expect(preview.locator("article")).toHaveAttribute("dir", "rtl");
+  await expect(preview.locator("img.store-logo")).toBeVisible();
   await expect(preview.getByText("PD", { exact: true })).toBeVisible();
   const pdf = join(folder, "prescription.pdf");
   await app.evaluate(({ dialog }, file) => {
@@ -155,12 +202,22 @@ test("release: attachments, Arabic PDF, backup restore, purchase ledger and perm
         entity_type: "customers",
         entity_id: ids.customer,
       }),
+      logos: await window.optical.invoke("attachments.list", {
+        entity_type: "store_settings",
+        entity_id: "00000000-0000-4000-8000-000000000001",
+      }),
+      expenseAttachments: await window.optical.invoke("attachments.list", {
+        entity_type: "expenses",
+        entity_id: ids.expense,
+      }),
       info: await window.optical.invoke("app.info"),
     }),
     ids,
   );
   expect(verification.purchase.purchase.paid).toBe(200);
   expect(verification.attachments.length).toBe(1);
+  expect(verification.logos.length).toBe(1);
+  expect(verification.expenseAttachments.length).toBe(1);
   expect(verification.info.data_folder).toBe(folder);
   await expect(
     page.getByRole("heading", { name: "نظرة عامة على المحل" }),

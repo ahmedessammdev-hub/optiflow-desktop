@@ -10,6 +10,8 @@ import {
 } from "../components";
 import { minor } from "../../../../packages/shared/money";
 import { ReportPage } from "./reports";
+import { AttachmentPanel } from "./attachments";
+const STORE_SETTINGS_ID = "00000000-0000-4000-8000-000000000001";
 export function SettingsPage() {
   const { t, settings, can, run } = useApp();
   const info = useData("app.info");
@@ -24,7 +26,13 @@ export function SettingsPage() {
     },
     { name: "address", en: "Address", ar: "العنوان" },
     { name: "phone", en: "Phone", ar: "الهاتف" },
+    { name: "secondary_phone", en: "Secondary phone", ar: "الهاتف الثاني" },
     { name: "tax_number", en: "Tax number", ar: "الرقم الضريبي" },
+    {
+      name: "commercial_registration",
+      en: "Commercial registration",
+      ar: "السجل التجاري",
+    },
     { name: "currency", en: "Currency code", ar: "رمز العملة", required: true },
     {
       name: "language",
@@ -109,21 +117,27 @@ export function SettingsPage() {
         </button>
       </PageHeader>
       {can("settings.manage") && (
-        <section className="panel">
-          <RecordForm
-            fields={fields}
-            initial={settings}
-            onSubmit={async (values) => {
-              await api("settings.save", {
-                ...values,
-                reorder_level: Number(values.reorder_level),
-                margin: Number(values.margin),
-                copies: Number(values.copies),
-              });
-              await client.invalidateQueries();
-            }}
+        <>
+          <AttachmentPanel
+            entityType="store_settings"
+            entityId={STORE_SETTINGS_ID}
           />
-        </section>
+          <section className="panel">
+            <RecordForm
+              fields={fields}
+              initial={settings}
+              onSubmit={async (values) => {
+                await api("settings.save", {
+                  ...values,
+                  reorder_level: Number(values.reorder_level),
+                  margin: Number(values.margin),
+                  copies: Number(values.copies),
+                });
+                await client.invalidateQueries();
+              }}
+            />
+          </section>
+        </>
       )}
       {can("backup.manage") && (
         <section className="panel">
@@ -172,7 +186,9 @@ export function SettingsPage() {
         <p>
           F2: {t("Product search", "بحث المنتجات")} · F4:{" "}
           {t("Customer search", "بحث العملاء")} · Esc:{" "}
-          {t("Close dialog", "إغلاق الحوار")}
+          {t("Close dialog", "إغلاق الحوار")} · Ctrl+Enter:{" "}
+          {t("Complete sale", "إتمام البيع")} · Ctrl+P:{" "}
+          {t("Print invoice", "طباعة الفاتورة")}
         </p>
       </section>
       {password && (

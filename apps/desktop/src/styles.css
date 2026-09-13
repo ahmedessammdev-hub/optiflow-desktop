@@ -158,6 +158,13 @@ td {
   font-size: 26px;
   color: #72d2ce;
 }
+.brand > img {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: white;
+}
 .brand strong {
   font-size: 20px;
   display: block;

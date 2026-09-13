@@ -107,6 +107,7 @@ export const ar: Record<string, string> = {
   "Open a print preview first": "افتح معاينة الطباعة أولًا",
   "Attachment exceeds 20 MB": "حجم المرفق يتجاوز ٢٠ ميجابايت",
   "Unsupported attachment content": "نوع محتوى المرفق غير مدعوم",
+  "Store logo must be an image": "يجب أن يكون شعار المحل صورة",
 };
 export function translateValue(value: string, language: string) {
   if (language !== "ar") return value;

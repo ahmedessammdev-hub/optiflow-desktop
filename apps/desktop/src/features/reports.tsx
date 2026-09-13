@@ -16,6 +16,7 @@ import type { Report } from "../../../../packages/domain/queries";
 import { methods, type Row } from "../../../../packages/shared/schemas";
 import { minor } from "../../../../packages/shared/money";
 import { InvoiceDetail } from "./invoices";
+import { AttachmentPanel } from "./attachments";
 const definitions: Record<
   Report,
   { en: string; ar: string; columns: string[] }
@@ -196,6 +197,9 @@ export function ReportPage({
   const [invoice, setInvoice] = useState<string | null>(null);
   const [purchase, setPurchase] = useState<string | null>(null);
   const [reverse, setReverse] = useState<string | null>(null);
+  const [expenseAttachment, setExpenseAttachment] = useState<string | null>(
+    null,
+  );
   const query = {
     ...filters,
     search: useDebounce(search),
@@ -332,6 +336,11 @@ export function ReportPage({
                 {t("Details / payments", "التفاصيل / الدفعات")}
               </button>
             )}
+            {current === "expenses" && (
+              <button onClick={() => setExpenseAttachment(String(row.id))}>
+                {t("Receipt", "الإيصال")}
+              </button>
+            )}
             {current === "returns" && (
               <button
                 onClick={() =>
@@ -421,6 +430,14 @@ export function ReportPage({
               setReverse(null);
             }}
           />
+        </Modal>
+      )}
+      {expenseAttachment && (
+        <Modal
+          title={t("Expense receipt", "إيصال المصروف")}
+          onClose={() => setExpenseAttachment(null)}
+        >
+          <AttachmentPanel entityType="expenses" entityId={expenseAttachment} />
         </Modal>
       )}
     </>

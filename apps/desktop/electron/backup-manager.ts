@@ -85,7 +85,7 @@ export class BackupManager {
     const lastTime = last ? Date.parse(JSON.parse(String(last))) : 0;
     if (!force && Date.now() - lastTime < config.interval_days * 86400000)
       return;
-    await this.engine().create(null);
+    const created = await this.engine().create(null);
     this.app.store.run(
       "INSERT INTO app_settings VALUES ('automatic_backup_at',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
       JSON.stringify(new Date().toISOString()),
@@ -103,5 +103,6 @@ export class BackupManager {
       const path = join(config.folder, name);
       if (existsSync(path)) unlinkSync(path);
     }
+    return created;
   }
 }

@@ -64,6 +64,7 @@ export function AppProvider({
     document.documentElement.dir = value.language === "ar" ? "rtl" : "ltr";
     document.documentElement.lang = value.language;
   }, [value.language]);
+  useEffect(() => window.optical.onNotification?.(setMessage), []);
   useEffect(() => {
     if (!message) return;
     const timer = setTimeout(() => setMessage(""), 7000);

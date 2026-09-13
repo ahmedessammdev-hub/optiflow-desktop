@@ -13,5 +13,12 @@ const api: DesktopAPI = {
     if (!result.ok) throw new Error(result.error);
     return result.data as ResultMap[C];
   },
+  onNotification(callback) {
+    const listener = (_event: Electron.IpcRendererEvent, message: unknown) => {
+      if (typeof message === "string") callback(message.slice(0, 2000));
+    };
+    ipcRenderer.on("optical:notification", listener);
+    return () => ipcRenderer.removeListener("optical:notification", listener);
+  },
 };
 contextBridge.exposeInMainWorld("optical", Object.freeze(api));

@@ -5,7 +5,13 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Application } from "../../../packages/domain/application";
 const target = z.object({
-  entity_type: z.enum(["customers", "products", "expenses", "purchase_orders"]),
+  entity_type: z.enum([
+    "customers",
+    "products",
+    "expenses",
+    "purchase_orders",
+    "store_settings",
+  ]),
   entity_id: z.string().uuid(),
 });
 export class Attachments {
@@ -22,8 +28,10 @@ export class Attachments {
       products: write ? "products.update" : "products.view",
       expenses: write ? "expenses.create" : "expenses.view",
       purchase_orders: write ? "purchases.create" : "purchases.view",
+      store_settings: "settings.manage",
     }[data.entity_type];
     this.app.auth.require(permission);
+    if (data.entity_type === "store_settings") return data;
     if (
       !this.app.store.get(
         `SELECT id FROM ${data.entity_type} WHERE id=?`,
@@ -66,6 +74,8 @@ export class Attachments {
       extension = "png";
       mime = "image/png";
     }
+    if (data.entity_type === "store_settings" && mime !== "image/png")
+      throw new Error("Store logo must be an image");
     const id = randomUUID(),
       managed = `${id}.${extension}`;
     writeFileSync(join(this.root, managed), bytes, { flag: "wx" });
@@ -88,6 +98,17 @@ export class Attachments {
       );
     });
     return id;
+  }
+  logoData() {
+    this.app.auth.require();
+    const row = this.app.store.get(
+      "SELECT managed_name,mime_type FROM attachments WHERE entity_type='store_settings' ORDER BY created_at DESC,id DESC LIMIT 1",
+    );
+    if (!row || row.mime_type !== "image/png") return null;
+    const name = String(row.managed_name);
+    if (!/^[a-f0-9-]+\.png$/.test(name))
+      throw new Error("Invalid managed path");
+    return `data:image/png;base64,${readFileSync(join(this.root, name)).toString("base64")}`;
   }
   async open(input: unknown) {
     const id = z.string().uuid().parse(input);

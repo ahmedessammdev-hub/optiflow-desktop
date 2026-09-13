@@ -16,6 +16,7 @@ export function AttachmentPanel({
     products: "products.update",
     expenses: "expenses.create",
     purchase_orders: "purchases.create",
+    store_settings: "settings.manage",
   }[entityType];
   return (
     <section className="panel">
@@ -34,7 +35,9 @@ export function AttachmentPanel({
               )
             }
           >
-            {t("Add image / PDF", "إضافة صورة / PDF")}
+            {entityType === "store_settings"
+              ? t("Choose store logo", "اختيار شعار المحل")
+              : t("Add image / PDF", "إضافة صورة / PDF")}
           </button>
         )}
       </div>

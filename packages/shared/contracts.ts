@@ -9,6 +9,7 @@ export type ResultMap = {
   "attachments.list": Row[];
   "attachments.add": string | null;
   "attachments.open": void;
+  "store.logo": string | null;
   "backup.config": import("../../apps/desktop/electron/backup-manager").BackupConfig;
   "backup.configure": import("../../apps/desktop/electron/backup-manager").BackupConfig;
   "backup.folder": import("../../apps/desktop/electron/backup-manager").BackupConfig;
@@ -76,6 +77,7 @@ export type ResultMap = {
 };
 export interface DesktopAPI {
   invoke<C extends Command>(command: C, input?: unknown): Promise<ResultMap[C]>;
+  onNotification(callback: (message: string) => void): () => void;
 }
 declare global {
   interface Window {

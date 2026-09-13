@@ -135,7 +135,10 @@ async function preview(input: unknown) {
       customer: service.catalog.profile(prescription.customer_id).customer,
     };
   }
-  const settings = service.queries.settings();
+  const settings = {
+    ...service.queries.settings(),
+    logo_data_url: attachments.logoData() ?? undefined,
+  };
   printHtml =
     '<!DOCTYPE html><html lang="' +
     settings.language +
@@ -149,7 +152,7 @@ async function preview(input: unknown) {
   printWindow = new BrowserWindow({
     width: 850,
     height: 900,
-    title: "Print preview",
+    title: settings.language === "ar" ? "معاينة الطباعة" : "Print preview",
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -170,6 +173,8 @@ async function command(name: string, input: unknown): Promise<unknown> {
       return attachments.add(mainWindow, input);
     case "attachments.open":
       return attachments.open(input);
+    case "store.logo":
+      return attachments.logoData();
     case "backup.config":
       return backups.get();
     case "backup.configure":
@@ -374,7 +379,24 @@ else
       const automatic = () => {
         queue = queue
           .then(() => backups.automatic())
-          .catch((error) => log("Automatic backup failed: " + String(error)));
+          .then((created) => {
+            if (created)
+              mainWindow.webContents.send(
+                "optical:notification",
+                service.queries.readSettings().language === "ar"
+                  ? "اكتملت النسخة الاحتياطية التلقائية"
+                  : "Automatic backup completed",
+              );
+          })
+          .catch((error) => {
+            log("Automatic backup failed: " + String(error));
+            mainWindow.webContents.send(
+              "optical:notification",
+              service.queries.readSettings().language === "ar"
+                ? `فشل النسخ الاحتياطي التلقائي: ${String(error)}`
+                : `Automatic backup failed: ${String(error)}`,
+            );
+          });
       };
       automatic();
       const timer = setInterval(automatic, 60000);
@@ -386,7 +408,15 @@ else
           event.preventDefault();
           queue = queue
             .then(() => backups.automatic(true))
-            .catch((error) => log("Closing backup failed: " + String(error)))
+            .catch((error) => {
+              log("Closing backup failed: " + String(error));
+              dialog.showErrorBox(
+                service.queries.readSettings().language === "ar"
+                  ? "فشل النسخ الاحتياطي عند الإغلاق"
+                  : "Closing backup failed",
+                String(error),
+              );
+            })
             .finally(() => {
               quitting = true;
               app.quit();

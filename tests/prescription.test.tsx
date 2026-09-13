@@ -47,4 +47,22 @@ describe("Canonical prescription and print", () => {
     expect(html).not.toContain("<script>");
     expect(html).toContain("&lt;script&gt;");
   });
+  it("prints the managed logo and complete legal contact details", () => {
+    const html = renderToStaticMarkup(
+      <PrintDocument
+        data={{ kind: "prescription", prescription }}
+        settings={{
+          ...defaultSettings,
+          secondary_phone: "02-222",
+          tax_number: "TAX-1",
+          commercial_registration: "CR-2",
+          logo_data_url: "data:image/png;base64,AA==",
+        }}
+      />,
+    );
+    expect(html).toContain("store-logo");
+    expect(html).toContain("02-222");
+    expect(html).toContain("TAX-1");
+    expect(html).toContain("CR-2");
+  });
 });
