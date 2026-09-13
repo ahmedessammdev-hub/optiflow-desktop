@@ -19,6 +19,14 @@ const synchronizedEntities = new Set([
   "cash_sessions",
   "products",
 ]);
+const immutableBackfillTriggers = {
+  sales_no_update:
+    "CREATE TRIGGER sales_no_update BEFORE UPDATE ON sales BEGIN SELECT RAISE(ABORT,'Completed invoices are immutable'); END",
+  movements_no_update:
+    "CREATE TRIGGER movements_no_update BEFORE UPDATE ON inventory_movements BEGIN SELECT RAISE(ABORT,'Stock movements are immutable'); END",
+  expenses_no_update:
+    "CREATE TRIGGER expenses_no_update BEFORE UPDATE ON expenses BEGIN SELECT RAISE(ABORT,'Expenses are immutable'); END",
+} as const;
 export class Store {
   readonly db: SQLite;
   constructor(
@@ -50,7 +58,14 @@ export class Store {
         throw new Error("Database migration checksum mismatch");
       if (!existing)
         this.tx(() => {
+          const protectedBackfill = name === "006_feature_expansion.sql";
+          if (protectedBackfill)
+            for (const trigger of Object.keys(immutableBackfillTriggers))
+              this.db.exec(`DROP TRIGGER IF EXISTS ${trigger}`);
           this.db.exec(sql);
+          if (protectedBackfill)
+            for (const statement of Object.values(immutableBackfillTriggers))
+              this.db.exec(statement);
           this.run(
             "INSERT INTO schema_migrations VALUES (?,?)",
             name,
