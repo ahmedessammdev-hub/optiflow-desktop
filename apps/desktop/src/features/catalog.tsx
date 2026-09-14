@@ -38,6 +38,19 @@ const supplierFields: Field[] = [
   { name: "tax_number", en: "Tax number", ar: "الرقم الضريبي" },
   { name: "notes", en: "Notes", ar: "ملاحظات", type: "textarea" },
 ];
+function ProductImage({ product }: { product: Row }) {
+  return product.image_data_url ? (
+    <img
+      className="product-thumbnail"
+      src={String(product.image_data_url)}
+      alt={String(product.name)}
+    />
+  ) : (
+    <span className="product-thumbnail placeholder" aria-hidden="true">
+      {product.type === "frames" || product.type === "sunglasses" ? "◎—◎" : "◉"}
+    </span>
+  );
+}
 export function CatalogPage({
   kind,
 }: {
@@ -315,6 +328,11 @@ export function CatalogPage({
             { key: "name", label: t("Name", "الاسم") },
             ...(kind === "products"
               ? [
+                  {
+                    key: "image_data_url",
+                    label: t("Image", "الصورة"),
+                    render: (r: Row) => <ProductImage product={r} />,
+                  },
                   { key: "sku", label: "SKU" },
                   { key: "type", label: t("Type", "النوع") },
                   { key: "stock_quantity", label: t("Stock", "المخزون") },

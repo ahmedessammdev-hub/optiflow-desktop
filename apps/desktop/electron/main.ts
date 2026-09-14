@@ -228,6 +228,21 @@ async function command(name: string, input: unknown): Promise<unknown> {
       return attachments.open(input);
     case "store.logo":
       return attachments.logoData();
+    case "products.list": {
+      const result = service.execute(name, input) as {
+        rows: Record<string, unknown>[];
+      };
+      const images = attachments.productImages(
+        result.rows.map((row) => String(row.id)),
+      );
+      return {
+        ...result,
+        rows: result.rows.map((row) => ({
+          ...row,
+          image_data_url: images[String(row.id)] ?? null,
+        })),
+      };
+    }
     case "backup.config":
       return backups.get();
     case "backup.configure":

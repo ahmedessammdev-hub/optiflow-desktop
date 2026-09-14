@@ -1,5 +1,5 @@
 import { test, expect, _electron as electron } from "@playwright/test";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 test("desktop lifecycle, IPC security, print preview and persistence", async () => {
@@ -57,6 +57,28 @@ test("desktop lifecycle, IPC security, print preview and persistence", async () 
     });
     return { customer, prescription, product };
   });
+  const productImage = join(folder, "product.png");
+  writeFileSync(
+    productImage,
+    Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+      "base64",
+    ),
+  );
+  await app.evaluate(({ dialog }, file) => {
+    dialog.showOpenDialog = async () => ({
+      canceled: false,
+      filePaths: [file],
+    });
+  }, productImage);
+  await page.evaluate(
+    async (product) =>
+      window.optical.invoke("attachments.add", {
+        entity_type: "products",
+        entity_id: product,
+      }),
+    result.product,
+  );
   await page
     .getByRole("button", { name: "Customer fulfilment", exact: true })
     .click();
@@ -78,6 +100,7 @@ test("desktop lifecycle, IPC security, print preview and persistence", async () 
   await page
     .getByRole("button", { name: "Point of sale", exact: true })
     .click();
+  await expect(page.locator("img.product-card-image")).toBeVisible();
   await page.getByPlaceholder("Scan barcode or search products").fill("123456");
   await page.getByPlaceholder("Scan barcode or search products").press("Enter");
   await expect(page.locator(".cart-line")).toHaveCount(1);

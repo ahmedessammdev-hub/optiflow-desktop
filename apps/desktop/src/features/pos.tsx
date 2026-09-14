@@ -186,9 +186,19 @@ export function POS() {
                 disabled={Number(p.stock_quantity) < 1}
                 onClick={() => add(p)}
               >
-                <div className="product-symbol">
-                  {p.type === "frames" || p.type === "sunglasses" ? "◎—◎" : "◉"}
-                </div>
+                {p.image_data_url ? (
+                  <img
+                    className="product-card-image"
+                    src={String(p.image_data_url)}
+                    alt={String(p.name)}
+                  />
+                ) : (
+                  <div className="product-symbol">
+                    {p.type === "frames" || p.type === "sunglasses"
+                      ? "◎—◎"
+                      : "◉"}
+                  </div>
+                )}
                 <small>
                   {p.brand} ·{" "}
                   {translateValue(String(p.type), settings.language)}

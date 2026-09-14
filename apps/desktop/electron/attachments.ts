@@ -15,6 +15,7 @@ const target = z.object({
   entity_id: z.string().uuid(),
 });
 export class Attachments {
+  private thumbnails = new Map<string, string>();
   constructor(
     private app: Application,
     private root: string,
@@ -109,6 +110,30 @@ export class Attachments {
     if (!/^[a-f0-9-]+\.png$/.test(name))
       throw new Error("Invalid managed path");
     return `data:image/png;base64,${readFileSync(join(this.root, name)).toString("base64")}`;
+  }
+  productImages(productIds: string[]) {
+    this.app.auth.require("products.view");
+    if (!productIds.length) return {};
+    const rows = this.app.store.all(
+      `SELECT entity_id,managed_name FROM attachments WHERE entity_type='products' AND mime_type='image/png' AND entity_id IN (${productIds.map(() => "?").join(",")}) ORDER BY created_at DESC,id DESC`,
+      ...productIds,
+    );
+    const images: Record<string, string> = {};
+    for (const row of rows) {
+      const productId = String(row.entity_id);
+      if (images[productId]) continue;
+      const name = String(row.managed_name);
+      if (!/^[a-f0-9-]+\.png$/.test(name)) continue;
+      let thumbnail = this.thumbnails.get(name);
+      if (!thumbnail) {
+        const source = nativeImage.createFromPath(join(this.root, name));
+        if (source.isEmpty()) continue;
+        thumbnail = source.resize({ width: 280 }).toDataURL();
+        this.thumbnails.set(name, thumbnail);
+      }
+      images[productId] = thumbnail;
+    }
+    return images;
   }
   async open(input: unknown) {
     const id = z.string().uuid().parse(input);
